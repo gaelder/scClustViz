@@ -164,6 +164,14 @@ ui <- fixedPage(
     column(6,align="left",downloadButton("goiPlot1Save","Save as PDF")),
     column(6,align="right",downloadButton("goiPlot2Save","Save as PDF"))
   ),
+  hr(),
+
+  ######## Custom Cell Groupings ######## 
+  fixedRow(titlePanel("Custom Cell Groupings")),
+  fixedRow(
+    column(6,plotOutput("tsneForSelect",brush="cellSelect",height="570px")),
+    column(6,textOutput("test"))
+  ),
   h1()
 )
 
@@ -917,6 +925,42 @@ server <- function(input,output,session) {
       dev.off()
     }
   )
+  
+  
+  ######## Custom Cell Groupings #########
+  
+  br <- reactive({
+    rownames(brushedPoints(as.data.frame(dr_viz),input$cellSelect,xvar="tSNE_1",yvar="tSNE_2"))
+  })
+  
+  output$test <- renderPrint(br())
+  
+  plot_tsneForSelect <- function() {
+    par(mar=c(4,3,3,1),mgp=2:0)
+    plot(x=NULL,y=NULL,xlab="tSNE_1",ylab="tSNE_2",
+         main=paste("tSNE at",res(),"using",ncol(dr_clust),"PCs"),
+         xlim=range(dr_viz[,1]),ylim=range(dr_viz[,2]))
+    if (length(br()) > 0) {
+      temp_br <- rownames(dr_viz) %in% br()
+      points(dr_viz[temp_br,],pch=21,
+             col=alpha(clustCols()[clusts()[temp_br]],1),
+             bg=alpha(brewer.pal(3,"Set1")[1],0.5))
+      points(dr_viz[!temp_br,],pch=21,
+             col=alpha(clustCols()[clusts()[!temp_br]],1),
+             bg=alpha(clustCols()[clusts()[!temp_br]],0.5))
+    } else {
+      points(dr_viz,pch=21,
+             col=alpha(clustCols()[clusts()],1),
+             bg=alpha(clustCols()[clusts()],0.5))
+    }
+  }
+  
+  output$tsneForSelect <- renderPlot({
+    if (length(res()) > 0) {
+      print(plot_tsneForSelect())
+    }
+  })
+  
   
 }
 
