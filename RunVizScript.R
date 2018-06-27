@@ -1,10 +1,11 @@
 ######## User-defined variables ########
 
-dataPath <- "demo/10Xneurons_forViz.RData"
+#dataPath <- "~/scClustViz_files/mouse/1and2_Jun7/MouseLiver_forViz.RData"
+dataPath <- "~/scClustViz_files/mouse/Nov28_Dec6_Healthy_BRCAKnockout_aggregate/Mouse1_forViz.RData"
 ##  ^ Point this to the output file from PrepareInputs.R
 ##  If you set a default resolution in the Shiny app, it will save to the same directory.
 
-vizScriptPath <- "./" 
+vizScriptPath <- "~/scClustViz/" 
 ##  ^ Point this to the directory in which the "app.R" Shiny script resides
 
 species <- "mouse" 
@@ -12,21 +13,11 @@ species <- "mouse"
 ##  If other, add the annotation database from Bioconductor to the egDB <- switch() expression below.
 
 #### List known cell-type markers ####
-cellMarkers <- list("Cortical precursors"=c("Mki67","Sox2","Pax6","Pcna","Nes","Cux1","Cux2"),
-                    "Interneurons"=c("Gad1","Gad2","Npy","Sst","Lhx6","Tubb3","Rbfox3","Dcx"),
-                    "Cajal-Retzius neurons"="Reln",
-                    "Intermediate progenitors"="Eomes",
-                    "Projection neurons"=c("Tbr1","Satb2","Fezf2","Bcl11b","Tle4",
-                                           "Nes","Cux1","Cux2","Tubb3","Rbfox3","Dcx"),
-                    "Oligodendrocyte precursors"=c("Cspg4","Olig2","Pdgfra"),
-                    "Oligodendrocytes"=c("Mbp","Mog","Plp1","Mag"),
-                    "Astrocytes"=c("Aldh1l1","Gfap","Slc1a3","Glul"),
-                    "Microglia"="Cx3cr1")
-#cellMarkers <- list()
-##  ^ If you have canonical marker genes for expected cell types, list them here 
-##  (see example above from mouse embryonic cortex).  The Shiny app will attempt 
-##  to label clusters in the tSNE projection by highest median gene expression.
-##  Otherwise leave the list blank (uncomment line above).
+
+cellMarkers <- list("Other"=c(), "TNK"=c("Cd3d","Cd68","Nkg7"))
+##  ^ If you have canonical marker genes for expected cell types, list them here (see example above).
+##  The Shiny app will attempt to label clusters in the tSNE projection by highest median gene expression.
+##  Otherwise leave the list blank.
 
 ########################################
 
@@ -66,8 +57,6 @@ if (length(cellMarkers) < 1) {
   cellMarkersU <- lapply(cellMarkers,function(X) X[!X %in% unlist(cellMarkersS)])
 }
 
-demoRegex <- switch(species,mouse="^Actb$",human="^ACTB$")
-
 load(dataPath)
 temp_dataPath <- strsplit(dataPath,"/|\\\\")
 dataPath <- sub(temp_dataPath[[1]][length(temp_dataPath[[1]])],"",dataPath)
@@ -79,11 +68,6 @@ if (file.exists(paste0(dataPath,dataTitle,"_savedRes.RData"))) {
   load(paste0(dataPath,dataTitle,"_savedRes.RData"))
 } else {
   savedRes <- NULL
-}
-
-if (!file.exists(paste0(dataPath,"intro.md"))) {
-  write(paste0(dataTitle,": You can add to this preamble by editting ",dataPath,"intro.md"),
-        file=paste0(dataPath,"intro.md"))
 }
 
 silDist <- dist(dr_clust,method="euclidean")  
