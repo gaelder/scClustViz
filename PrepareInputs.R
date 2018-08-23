@@ -23,9 +23,9 @@ WRSTalpha <- 0.01 # significance level for DE testing using Wilcoxon rank sum te
 
 #dataRDS <- "../scClustViz_files/testData.rds" 
 ##  ^ path to input data object, saved as RDS (use saveRDS() to generate).
-dataRData <- "../scClustViz_files/e13_Cortical_Only.RData" 
+dataRData <- "~/scClustViz_files/cmv/Arnaud3118/subclustering/degreeOfInfection.RData" 
 ##  ^ path to input data, saved as RData (use save() to generate )
-outputDirectory <- "meCortex/e13/" 
+outputDirectory <- "~/scClustViz_files/cmv/Arnaud3118/subclustering/" 
 ##  ^ path to output directory with trailing slash (for loading into the R Shiny visualization script)
 
 convertGeneIDs <- FALSE ##  Set to TRUE if your gene names aren't official gene symbols.
@@ -57,6 +57,7 @@ if (exists("dataRDS")) {
 } else if (exists("dataRData")) {
   temp <- load(dataRData)
   inD <- get(temp) ## If you have multiple objects saved in this file, set inD to your data object.
+  inD <- inf1
   rm(list=c(temp,"temp"))
 } else { warning("Set path to input data as dataRDS or dataRData") }
 
@@ -137,6 +138,9 @@ See code above for details."
 CGS <- deTissue <- deVS <- deMarker <- deNeighb <- list()
 
 for (res in colnames(cl)) {
+  if (any(grep("res.0",res))){
+    next
+  }
   #### Precalculate stats for viz tool ####
   print("")
   print("")
@@ -150,16 +154,31 @@ for (res in colnames(cl)) {
     return(temp)
   }))
   print("-- Mean gene expression per cluster --")
-  MTC <- pbapply(nge,1,function(X) tapply(X,cl[,res],mean.logX))
-  CGS[[res]] <- sapply(levels(cl[,res]),function(X) 
-    data.frame(DR=DR[X,],MDTC=MDTC[X,],MTC=MTC[X,]),simplify=F)
+  MTC <- pbapply(nge,1,function(X) {tapply(X,cl[,res],mean.logX)})
+
+  if (is.null(nrow(DR))){
+    CGS[[res]] <- sapply(levels(cl[,res]),function(X) 
+      data.frame(DR=DR,MDTC=MDTC,MTC=MTC),simplify=F) # This is where single clustering breaks  
+  } else {
+    CGS[[res]] <- sapply(levels(cl[,res]),function(X) 
+      data.frame(DR=DR[X,],MDTC=MDTC[X,],MTC=MTC[X,]),simplify=F) # This is where single clustering breaks
+  }
   
   #### deTissue - DE per cluster vs all other data ####
   print("")
   print(paste("Calculating DE vs tissue for",res,"with",length(levels(cl[,res])),"clusters"))
   print("-- LogFC calculations --")
-  deT_logFC <- pbsapply(levels(cl[,res]),function(i) 
-    MTC[i,] - apply(nge[,cl[,res] != i],1,mean.logX))
+  
+  
+  if (is.null(nrow(MTC))){
+    deT_logFC <- pbsapply(levels(cl[,res]),function(i)
+      MTC - apply(nge[,cl[,res] != i],1,mean.logX))
+  } else {
+    deT_logFC <- pbsapply(levels(cl[,res]),function(i)
+      MTC[i,] - apply(nge[,cl[,res] != i],1,mean.logX))    
+  }
+
+  
   deT_genesUsed <- apply(deT_logFC,2,function(X) which(X > logFCthresh))  
   if (any(sapply(deT_genesUsed,length) < 1)) {
     stop(paste0("logFCthresh should be set to less than ",
@@ -169,12 +188,18 @@ for (res in colnames(cl)) {
                 " and the remaining data."))
   }
   print("-- Wilcoxon rank sum calculations --")
-  deT_pVal <- pbsapply(levels(cl[,res]),function(i)
+  
+  deT_pVal <- pbsapply(levels(cl[,res]),function(i) # another failure point
     apply(nge[deT_genesUsed[[i]],],1,function(X) 
       wilcox.test(X[cl[,res] == i],X[cl[,res] != i])$p.value),simplify=F)
+  
   deTissue[[res]] <- sapply(levels(cl[,res]),function(i) 
     data.frame(logFC=deT_logFC[deT_genesUsed[[i]],i],
                pVal=deT_pVal[[i]])[order(deT_pVal[[i]]),],simplify=F)
+  deUnfiltered[[res]] <- sapply(levels(cl[,res]),function(i)
+    data.frame(logFC=sort(deT_logFC[,i], decreasing = TRUE)),simplify=F)
+  
+  
   tempQval <- tapply(p.adjust(do.call(rbind,deTissue[[res]])$pVal,"fdr"),
                      rep(names(sapply(deTissue[[res]],nrow)),sapply(deTissue[[res]],nrow)),c)
   for (i in names(deTissue[[res]])) { 
@@ -195,12 +220,34 @@ for (res in colnames(cl)) {
   if (any(sapply(deM_genesUsed,length) < 1)) {
     stop("Gene filtering threshold is set too high.")
   }
-  deM_pVal <- pbsapply(colnames(combos),function(i)
-    apply(nge[deM_genesUsed[[i]],],1,function(X) 
-      wilcox.test(X[cl[,res] == combos[1,i]],
-                  X[cl[,res] == combos[2,i]])$p.value),simplify=F)
+  
+  #if (ncol(combos) > 1){
+  #  accessor <- function(array, i) { array[,i]}
+  #} else {
+  #  accessor <- function(array, i) { array[[i]]}
+  #}
+  accessor <- function(array,i){ 
+    if (is.null(dim(array))){
+      array[[i]]
+    } else{
+      array[,i]
+    } 
+  }
+  
+  deM_pVal <- pbsapply(colnames(combos),function(i) { # This is where inf code breaks
+    data <- nge[accessor(deM_genesUsed,i),]
+    if (is.null(dim(data))){
+      wilcox.test(data[cl[,res] == combos[1,i]],
+                  data[cl[,res] == combos[2,i]])$p.value       
+    } else {
+      apply(data,1,function(X) 
+        wilcox.test(X[cl[,res] == combos[1,i]],
+                    X[cl[,res] == combos[2,i]])$p.value)
+    }
+  },simplify=F)
+  
   temp_deVS <- sapply(colnames(combos),function(i) 
-    data.frame(dDR=deM_dDR[deM_genesUsed[[i]],i],logFC=deM_logFC[deM_genesUsed[[i]],i],
+    data.frame(dDR=deM_dDR[accessor(deM_genesUsed, i),i],logFC=deM_logFC[accessor(deM_genesUsed, i),i],
                pVal=deM_pVal[[i]])[order(deM_pVal[[i]]),],simplify=F)
   tempQval <- tapply(p.adjust(do.call(rbind,temp_deVS)$pVal,"fdr"),
                      rep(names(sapply(temp_deVS,nrow)),sapply(temp_deVS,nrow)),c)

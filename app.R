@@ -2,7 +2,7 @@
 ui <- fixedPage(
   fixedRow(
     titlePanel(paste("scClustViz -",dataTitle)),
-    includeMarkdown(paste0(dataPath,"intro.md"))
+    includeMarkdown(paste0(introDataPath,"intro.md"))
     ),
   hr(),
   
@@ -31,22 +31,23 @@ ui <- fixedPage(
     column(6,
            if (length(cellMarkers) > 0) {
              radioButtons("tsneLabels","Labels:",inline=T,
-                          choices=list("Cluster numbers"="cn","Cluster annotations"="ca"))
+                          choices=list("Cluster numbers"="cn","Cluster annotations"="ca","None"="na"))
            } else {
              radioButtons("tsneLabels","Labels:",inline=T,
-                          choices=list("Cluster numbers"="cn"))
+                          choices=list("Cluster numbers"="cn","None"="na"))
            },
            strong("Click point on plot below to select cluster")),
-    column(6,selectInput("tsneMDcol","Metadata:",choices=colnames(md),
-                         selected=grep("phase",colnames(md),value=T,ignore.case=T)[1]))
+    column(3,selectInput("tsneMDcol","Metadata:",choices=colnames(md),
+                         selected=grep("phase",colnames(md),value=T,ignore.case=T)[1])),
+    column(3,selectInput("tsneMDcolumns","# of Columns in Legend:",seq(1,5),4))
   ),
   fixedRow(
     column(6,plotOutput("tsne",height="580px",click="tsneClick")),
     column(6,plotOutput("tsneMD",height="580px"))
   ),
   fixedRow(
-    column(6,align="left",downloadButton("tsneSave","Save as PDF")),
-    column(6,align="right",downloadButton("tsneMDSave","Save as PDF"))
+    column(4,align="left",downloadButton("tsneSave","Save as PDF")),
+    column(4,align="right",downloadButton("tsneMDSave","Save as PDF"))
   ),
   hr(),
   
@@ -74,7 +75,11 @@ ui <- fixedPage(
   ),
   fixedRow(
     column(6,align="left",downloadButton("mdScatterSave","Save as PDF")),
-    column(6,align="right",downloadButton("mdFactorSave","Save as PDF"))
+    column(6,
+           fixedRow(
+             column(6, align="right",downloadButton("mdFactorSave","Save as PDF")),
+             column(6, align="left", downloadButton("mdFactorTableSave","Save as Table"))
+           ))
   ),
   hr(),
   
@@ -133,6 +138,8 @@ ui <- fixedPage(
            fixedRow(
              radioButtons("plotClust1",inline=T,label="Plot:",selected="goi",
                           choices=list("clusters"="clust","gene expression overlay"="goi")),
+             radioButtons("plotExpr1",inline = T, label="Expression:", selected ="rel",
+                          choices=list("absolute"="abs","relative"="rel")),
              checkboxInput("plotLabel1",label="Include cluster labels",value=T)
            ),
            fixedRow(
@@ -145,6 +152,8 @@ ui <- fixedPage(
            fixedRow(
              radioButtons("plotClust2",inline=T,label="Plot:",selected="goi",
                           choices=list("clusters"="clust","gene expression overlay"="goi")),
+             radioButtons("plotExpr2",inline = T, label="Expression:", selected ="rel",
+                          choices=list("absolute"="abs","relative"="rel")),
              checkboxInput("plotLabel2",label="Include cluster labels",value=T)
            ),
            fixedRow(
@@ -194,7 +203,8 @@ server <- function(input,output,session) {
   d <- reactiveValues(cl=cl,CGS=CGS,
                       clusterID=clusterID,
                       deTissue=deTissue,
-                      deMarker=deMarker)
+                      deMarker=deMarker,
+                      deUnf = deUnfiltered)
   
   clustCols <- reactive({
     if (grepl("^Comp",input$res)) {
@@ -272,7 +282,7 @@ server <- function(input,output,session) {
   })
   
   output$cqPlotSave <- downloadHandler(
-    filename="cqPlot.pdf",
+    filename=paste0(dataTitle,"cqPlot.pdf"),
     content=function(file) {
       pdf(file,width=7,height=6)
       print(plot_cqPlot())
@@ -298,7 +308,7 @@ server <- function(input,output,session) {
   })
   
   output$silSave <- downloadHandler(
-    filename="sil.pdf",
+    filename=paste0(dataTitle,"sil.pdf"),
     content=function(file) {
       pdf(file,width=6,height=7)
       print(plot_sil())
@@ -331,6 +341,7 @@ server <- function(input,output,session) {
       temp_labels <- apply(dr_viz,2,function(X) tapply(X,clusts(),mean))
       if (!is.matrix(temp_labels)) { temp_labels <- rbind(temp_labels) }
       text(temp_labels,labels=levels(clusts()),font=2,cex=1.5)
+    } else if (input$tsneLabels == "na"){
     } else {
       legend("center",legend="You changed the label choice names...")
     }
@@ -368,7 +379,7 @@ server <- function(input,output,session) {
   })
   
   output$tsneSave <- downloadHandler(
-    filename="tsne.pdf",
+    filename=paste0(dataTitle,"tsne.pdf"),
     content=function(file) {
       pdf(file,width=7,height=7)
       print(plot_tsne())
@@ -416,6 +427,7 @@ server <- function(input,output,session) {
   
   #### Metadata tSNE overlay ####
   plot_tsneMD <- function() {
+    #HERE
     if (is.factor(md[,input$tsneMDcol]) | is.character(md[,input$tsneMDcol])) {
       id <- as.factor(md[,input$tsneMDcol])
       if (length(levels(md[,input$tsneMDcol])) <= 8) {
@@ -448,9 +460,15 @@ server <- function(input,output,session) {
     if (is.factor(md[,input$tsneMDcol]) | is.character(md[,input$tsneMDcol])) {
       par(mar=c(0,0,0,0))
       plot.new()
-      legend("bottom",bty="n",horiz=T,pch=c(NA,rep(21,length(levels(md[,input$tsneMDcol])))),
+      legend(x="bottom",
+             xpd=TRUE,
+             ncol=as.numeric(input$tsneMDcolumns),
+             bty="n",
+             horiz=F,
+             pch=c(NA,rep(21,length(levels(md[,input$tsneMDcol])))),
              legend=c(paste0(input$tsneMDcol,":"),levels(md[,input$tsneMDcol])),
-             col=c(NA,idcol),pt.bg=c(NA,alpha(idcol,0.5)))
+             col=c(NA,idcol),
+             pt.bg=c(NA,alpha(idcol,0.5)))
     } else {
       par(mar=c(0,5,3,3))
       barplot(rep(1,100),space=0,col=idcol,xaxt="n",yaxt="n",border=NA,main=input$tsneMDcol)
@@ -465,7 +483,7 @@ server <- function(input,output,session) {
   })
   
   output$tsneMDSave <- downloadHandler(
-    filename="tsneMD.pdf",
+    filename=paste0(dataTitle,"tsneMD.pdf"),
     content=function(file) {
       pdf(file,width=7,height=7)
       print(plot_tsneMD())
@@ -503,11 +521,26 @@ server <- function(input,output,session) {
   })
   
   output$mdFactorSave <- downloadHandler(
-    filename="mdFactor.pdf",
+    filename=paste0(dataTitle,"mdFactor.pdf"),
     content=function(file) {
       pdf(file,width=7,height=7)
       print(plot_mdFactor())
       dev.off()
+    }
+  )
+  
+  output$mdFactorTableSave <- downloadHandler(
+    filename=paste0(dataTitle, input$mdFactorData,"Table-",input$mdFactorRA,".csv"),
+    content=function(file){
+      id <- switch(input$mdFactorRA,
+                   "relative"=tapply(md[,input$mdFactorData],clusts(),
+                                     function(X) table(X) / length(X)),
+                   "absolute"=tapply(md[,input$mdFactorData],clusts(),table))
+
+      out <- t(matrix(unlist(id), nrow = length(id[[1]])))
+      rownames(out) <- names(id)
+      colnames(out) <- names(id[[1]])
+      write.table(out,file,quote=F,sep="\t",row.names=T,col.names=NA)
     }
   )
   
@@ -545,7 +578,7 @@ server <- function(input,output,session) {
   })
   
   output$mdScatterSave <- downloadHandler(
-    filename="mdScatter.pdf",
+    filename=paste0(dataTitle,"mdScatter.pdf"),
     content=function(file) {
       pdf(file,width=7,height=7)
       print(plot_mdScatter())
@@ -560,13 +593,15 @@ server <- function(input,output,session) {
   output$heatDEtype <- renderUI({
     if (grepl("^Comp",input$res)) {
       temp <- list("DE vs tissue average"="deTissue",
-                   "Set A vs Set B"="deMarker")
+                   "Set A vs Set B"="deMarker",
+                   "Unfiltered Set A vs Set B"="unfiltered")
     } else {
       temp <- list("DE vs tissue average"="deTissue",
                    "Marker genes"="deMarker",
-                   "DE vs neighbour"="deNeighb")
+                   "DE vs neighbour"="deNeighb",
+                   "Unfiltered DE vs tissue average"="unfiltered")
     }
-    radioButtons("heatG","Heapmap Genes:",choices=temp)
+    radioButtons("heatG","Heatmap Genes:",choices=temp)
   })
   
   output$DEgeneSlider <- renderUI({
@@ -593,6 +628,13 @@ server <- function(input,output,session) {
                       label=HTML(paste(
                         "Positive differential gene expression between cluster and nearest neighbour",
                         "# of genes per cluster to show",sep="<br/>"
+                      ))),
+        unfiltered=
+          sliderInput("DEgeneCount",min=2,max=max(sapply(d$deTissue[[res()]],nrow)),
+                      value=5,step=1,ticks=T,width="100%",
+                      label=HTML(paste(
+                        "Positive differential gene expression of cluster over tissue",
+                        "# of genes per cluster to show",sep="<br/>"
                       ))))
     }
   })
@@ -609,7 +651,8 @@ server <- function(input,output,session) {
       switch(input$heatG,
              deTissue=d$deTissue[[res()]],
              deMarker=d$deMarker[[res()]],
-             deNeighb=deNeighb[[res()]]),
+             deNeighb=deNeighb[[res()]],
+             unfiltered=d$deTissue[[res()]]),
       function(X) 
         if (nrow(X) == 0) { NA } else { rownames(X)[1:input$DEgeneCount] }
     )))
@@ -646,8 +689,10 @@ server <- function(input,output,session) {
                           paste(sapply(switch(input$heatG,
                                               deTissue=d$deTissue[[res()]],
                                               deMarker=d$deMarker[[res()]],
-                                              deNeighb=deNeighb[[res()]]),nrow),"DE"),
+                                              deNeighb=deNeighb[[res()]],
+                                              unfiltered=d$deTissue[[res()]]), nrow),"DE"),
                           sep=": ")
+      
       heatmap.2(clustMeans(),Rowv=as.dendrogram(hC()),Colv=as.dendrogram(hG()),scale="column",
                 margins=c(9,12),lhei=c(2,10),lwid=c(1,11),trace="none",
                 keysize=1.5,density.info="none",key.par=list(mar=c(3,.5,2,.5),mgp=2:0),
@@ -663,7 +708,7 @@ server <- function(input,output,session) {
   })
   
   output$heatmapSave <- downloadHandler(
-    filename="heatmap.pdf",
+    filename=paste0(dataTitle,"heatmap.pdf"),
     content=function(file) {
       pdf(file,width=12,height=7)
       print(plot_heatmap())
@@ -672,12 +717,13 @@ server <- function(input,output,session) {
   )
   
   output$deGeneSave <- downloadHandler(
-    filename=function() { paste0(input$heatG,"_",input$DEclustNum,".txt") },
+    filename=function() { paste0(dataTitle,"_", input$heatG,"_",input$DEclustNum,".txt") },
     content=function(file) {
       outTable <- switch(input$heatG,
                          deTissue=d$deTissue[[res()]][[input$DEclustNum]],
                          deMarker=d$deMarker[[res()]][[input$DEclustNum]],
-                         deNeighb=deNeighb[[res()]][[input$DEclustNum]])
+                         deNeighb=deNeighb[[res()]][[input$DEclustNum]],
+                         unfiltered=d$deUnf[[res()]][[input$DEclustNum]])
       write.table(outTable,file,quote=F,sep="\t",row.names=T,col.names=NA)
     }
   )
@@ -692,6 +738,7 @@ server <- function(input,output,session) {
   })
 
   cellMarkCols <- reactive(rainbow2(length(cellMarkers)))
+
   
   GOI <- eventReactive(input$GOIgo,grep(input$GOI,rownames(nge),value=T,ignore.case=T),ignoreNULL=F)
   
@@ -801,7 +848,7 @@ server <- function(input,output,session) {
   })
   
   output$clusterGenesSave <- downloadHandler(
-    filename="clusterGenes.pdf",
+    filename=paste0(dataTitle,"clusterGenes.pdf"),
     content=function(file) {
       pdf(file,width=12,height=7)
       print(plot_clusterGenes())
@@ -884,7 +931,7 @@ server <- function(input,output,session) {
   })
   
   output$geneTestSave <- downloadHandler(
-    filename="geneTest.pdf",
+    filename=paste0(dataTitle,"geneTest.pdf"),
     content=function(file) {
       pdf(file,width=12,height=7)
       print(plot_geneTest())
@@ -909,7 +956,7 @@ server <- function(input,output,session) {
     selectInput("goi2",label="Gene:",choices=sort(GOI2()),multiple=T)
   })
   
-  plot_goi <- function(goi) {
+  plot_goi <- function(goi, rel = FALSE) {
     if (length(goi) < 1) {
       plot(x=NA,y=NA,xlim=0:1,ylim=0:1,xaxt="n",yaxt="n",xlab=NA,ylab=NA)
       text(.5,.5,paste("To search for your gene(s) of interest type a",
@@ -923,6 +970,11 @@ server <- function(input,output,session) {
       } else {
         gv <- nge[goi,]
       }
+      
+      if (rel){
+        gv <- cut(gv,breaks = 4,labels=F)
+      }
+      
       cv <- cut(gv,breaks=100,labels=F)
       par(mar=c(3,3,goiL+1,1),mgp=2:0)
       plot(dr_viz,pch=21,cex=1.3,xlab="tSNE_1",ylab="tSNE_2",
@@ -954,22 +1006,27 @@ server <- function(input,output,session) {
       print(plot_tsne())
       if (input$plotLabel1) { print(plot_tsne_labels()) }
     } else if (input$plotClust1 == "goi") {
-      print(plot_goi(input$goi1))
+      print(plot_goi(input$goi1, rel = input$plotExpr1 == "rel"))
+
       if (input$plotLabel1 & length(res()) > 0 & length(input$goi1) > 0) {
         print(plot_tsne_labels())
       }
     }
   })
   
+  goi1filename <- reactive(paste0(dataTitle,input$goi1,".pdf"))
+  goi2filename <- reactive(paste0(dataTitle,input$goi2,".pdf"))
+  
+  
   output$goiPlot1Save <- downloadHandler(
-    filename="goi1.pdf",
+    filename=goi1filename,
     content=function(file) {
       pdf(file,width=7,height=7)
       if (input$plotClust1 == "clust" & length(res()) > 0) {
         print(plot_tsne())
         if (input$plotLabel1) { print(plot_tsne_labels()) }
       } else if (input$plotClust1 == "goi") {
-        print(plot_goi(input$goi1))
+        print(plot_goi(input$goi1, rel = input$plotExpr1 == "rel"))
         if (input$plotLabel1 & length(res()) > 0 & length(input$goi1) > 0) {
           print(plot_tsne_labels())
         }
@@ -983,7 +1040,7 @@ server <- function(input,output,session) {
       print(plot_tsne())
       if (input$plotLabel2) { print(plot_tsne_labels()) }
     } else if (input$plotClust2 == "goi") {
-      print(plot_goi(input$goi2))
+      print(plot_goi(input$goi2, rel = input$plotExpr2 == "rel"))
       if (input$plotLabel2 & length(res()) > 0 & length(input$goi2) > 0) {
         print(plot_tsne_labels())
       }
@@ -998,7 +1055,7 @@ server <- function(input,output,session) {
         print(plot_tsne())
         if (input$plotLabel2) { print(plot_tsne_labels()) }
       } else if (input$plotClust2 == "goi") {
-        print(plot_goi(input$goi2))
+        print(plot_goi(input$goi2, rel = input$plotExpr2 == "rel"))
         if (input$plotLabel2 & length(res()) > 0 & length(input$goi2) > 0) {
           print(plot_tsne_labels())
         }
@@ -1130,6 +1187,9 @@ server <- function(input,output,session) {
         deM_genesUsed <- switch(threshType,
                                 dDR=which(abs(deM_dDR) > dDRthresh),
                                 logFC=which(abs(deM_logFC) > logFCthresh))
+        d$deUnf[[newRes]][["Set A"]] <- sort(deM_logFC, decreasing = TRUE)
+        d$deUnf[[newRes]][["Set B"]] <- sort(-1 *deM_logFC, decreasing = TRUE)
+              
         if (length(deM_genesUsed) < 1) {
           stop("Gene filtering threshold is set too high.")
         }

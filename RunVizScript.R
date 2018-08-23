@@ -1,21 +1,29 @@
 ######## User-defined variables ########
 
-#dataPath <- "~/scClustViz_files/mouse/1and2_Jun7/MouseLiver_forViz.RData"
-dataPath <- "~/scClustViz_files/mouse/Nov28_Dec6_Healthy_BRCAKnockout_aggregate/Mouse1_forViz.RData"
+
+#dataPath <- "~/scClustViz_files/woodchuck/Mcgilvery_sonya_L9648_TLH/Mcgilvery_sonya_L9648_TLH_forViz.RData"
+#dataPath <- "~/scClustViz_files/human/11liveraggAug17/Aug17Liver11Aggr_forViz.RData" 
+#dataPath <- "~/scClustViz_files/soupTest/wc_L9648/soupTest_forViz.RData" # path to analysis output directory
+dataPath <- "~/scClustViz_files/cmv/Arnaud3118/Arnaud3118_forViz.RData" # path to analysis output directory
+#dataPath <- "~/scClustViz_files/cmv/Arnaud3118/subclustering/NKLowViralHighViral_forViz.RData"
+
+
+introDataPath <- "~/"
+demoRegex <- "^Actb$"
 ##  ^ Point this to the output file from PrepareInputs.R
 ##  If you set a default resolution in the Shiny app, it will save to the same directory.
 
 vizScriptPath <- "~/scClustViz/" 
 ##  ^ Point this to the directory in which the "app.R" Shiny script resides
 
-species <- "mouse" 
+species <- "human" 
 ##  ^ Set species ("mouse"/"human").  
 ##  If other, add the annotation database from Bioconductor to the egDB <- switch() expression below.
 
 
 #### List known cell-type markers ####
 
-cellMarkers <- list("Other"=c(), "TNK"=c("Cd3d","Cd68","Nkg7"))
+cellMarkers <- list()
 ##  ^ If you have canonical marker genes for expected cell types, list them here (see example above).
 ##  The Shiny app will attempt to label clusters in the tSNE projection by highest median gene expression.
 ##  Otherwise leave the list blank.
